@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AERO-IR | Telemetría de Velocidad en Tiempo Real</title>
+  <style>
+    :root {
+      --bg-void: #05080f;
+      --bg-panel: #0b111e;
+      --bg-card: #11192b;
+      --bg-card-hover: #17223a;
+      --accent: #00f5a0;
+      --accent-secondary: #00d9f5;
+      --accent-glow: rgba(0, 245, 160, 0.25);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: rgba(148, 163, 184, 0.16);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-void);
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ================= ETAPA 1: VIDEO INICIAL A PANTALLA COMPLETA ================= */
+    #videoIntroStage {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+
+    #videoIntroStage.oculto {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    #introVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .intro-video-controls {
+      position: absolute;
+      bottom: 28px;
+      right: 28px;
+      z-index: 2;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* ================= ETAPA 2: TARJETA DE BIENVENIDA ================= */
+    #welcomeCardScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: radial-gradient(circle at center, #0f172a 0%, #05080f 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+
+    #welcomeCardScreen.oculto {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .intro-card {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      padding: 40px 48px;
+      background: rgba(11, 17, 30, 0.85);
+      border: 1px solid rgba(0, 245, 160, 0.25);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      max-width: 580px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65);
+    }
+
+    .intro-tag {
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 245, 160, 0.1);
+      border: 1px solid rgba(0, 245, 160, 0.3);
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 18px;
+      font-weight: 700;
+    }
+
+    .intro-card h1 {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-image: linear-gradient(90deg, #ffffff, #cbd5e1);
+    }
+
+    .intro-card p {
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+
+    /* ================= BOTONES ================= */
+    button {
+      padding: 11px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    button:hover { transform: translateY(-1px); filter: brightness(1.08); }
+
+    .btn-accent {
+      background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+      color: #031510;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .btn-ghost {
+      background: rgba(11, 17, 30, 0.82);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+    }
+
+    .btn-export {
+      background: rgba(0, 217, 245, 0.14);
+      color: var(--accent-secondary);
+      border: 1px solid rgba(0, 217, 245, 0.35);
+    }
+
+    /* ================= DASHBOARD A PANTALLA COMPLETA ================= */
+    .dashboard {
+      max-width: 1100px;
+      margin: 0 auto;
+      min-height: 100vh;
+      background: var(--bg-panel);
+      padding: 24px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: 0.8px;
+    }
+
+    .logo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .usb-badge {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: rgba(239, 68, 68, 0.12);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .usb-badge.online {
+      background: rgba(0, 245, 160, 0.12);
+      color: var(--accent);
+      border-color: rgba(0, 245, 160, 0.4);
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .hero-speed {
+      background: linear-gradient(160deg, #131d33 0%, #0b111e 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 28px;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .hero-speed.flash {
+      border-color: var(--accent);
+      box-shadow: 0 0 30px rgba(0, 245, 160, 0.22);
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+    }
+
+    .main-readout {
+      font-size: 64px;
+      font-weight: 800;
+      line-height: 1.1;
+      margin: 10px 0 6px;
+      font-variant-numeric: tabular-nums;
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-image: linear-gradient(90deg, var(--accent), var(--accent-secondary));
+    }
+
+    .sub-readout {
+      display: flex;
+      gap: 18px;
+      font-size: 15px;
+      color: #cbd5e1;
+      margin-bottom: 14px;
+    }
+
+    .gauge-track {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .gauge-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
+      border-radius: 999px;
+      transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .stat-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .stat-box span {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-box strong {
+      font-size: 20px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .history-panel {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 18px;
+      overflow-y: auto;
+      min-height: 180px;
+    }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 9px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    th { color: var(--text-muted); font-weight: 600; }
+    tbody tr:hover { background: var(--bg-card-hover); }
+
+    @media (max-width: 720px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .main-readout { font-size: 48px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. PRIMERO APARECE EL VIDEO A PANTALLA COMPLETA -->
+  <section id="videoIntroStage">
+    <video id="introVideo" src="tiktokio.com1795295393_mlQsHH0ABajz3bLx176v (1).mp4" autoplay muted playsinline></video>
+    <div class="intro-video-controls">
+      <button class="btn-ghost" id="btnAudioIntro">Activar Audio</button>
+      <button class="btn-accent" id="btnContinuarCard">Continuar</button>
+    </div>
+  </section>
+
+  <!-- 2. DESPUÉS APARECE LA TARJETA CON "ENTRAR AL SISTEMA" -->
+  <section id="welcomeCardScreen">
+    <div class="intro-card">
+      <div class="intro-tag">Telemetry Lab • Arduino UNO + IR</div>
+      <h1>Monitor de Velocidad IR</h1>
+      <p>Sistema de medición óptica de alta precisión con captura en tiempo real por puerto serie y análisis de pasadas.</p>
+      <button class="btn-accent" id="btnEntrar">Entrar al Sistema</button>
+    </div>
+  </section>
+
+  <!-- 3. PANEL DE TELEMETRÍA -->
+  <main class="dashboard">
+    <div class="header-bar">
+      <div class="logo-title">
+        <span class="logo-dot"></span>
+        <span>AERO-IR TELEMETRY</span>
+      </div>
+      <div class="header-right">
+        <div class="usb-badge" id="usbStatus">USB Desconectado</div>
+        <button class="btn-ghost" id="btnVerIntro">Repetir Intro</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn-accent" id="btnConectar">Conectar Arduino (USB)</button>
+      <button class="btn-export" id="btnExportar">Exportar CSV</button>
+      <button class="btn-ghost" id="btnLimpiar">Reiniciar</button>
+    </div>
+
+    <div class="hero-speed" id="heroCard">
+      <div class="hero-top">
+        <span>Velocidad Instantánea</span>
+        <span>Distancia: 10.0 cm • Sensores Pines 2 y 3</span>
+      </div>
+      <div class="main-readout" id="velMs">0.00 m/s</div>
+      <div class="sub-readout">
+        <span id="velKmh">0.00 km/h</span>
+        <span>•</span>
+        <span id="tiempoSeg">0.0000 s</span>
+      </div>
+      <div class="gauge-track">
+        <div class="gauge-fill" id="gaugeFill"></div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box">
+        <span>Velocidad Máx</span>
+        <strong id="statMax">0.00 m/s</strong>
+      </div>
+      <div class="stat-box">
+        <span>Promedio</span>
+        <strong id="statAvg">0.00 m/s</strong>
+      </div>
+      <div class="stat-box">
+        <span>Pasadas</span>
+        <strong id="statCount">0</strong>
+      </div>
+    </div>
+
+    <div class="history-panel">
+      <div class="history-header">
+        <span>Registro de Mediciones</span>
+        <span>9600 BAUD</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tiempo (s)</th>
+            <th>m/s</th>
+            <th>km/h</th>
+          </tr>
+        </thead>
+        <tbody id="tablaHistorial"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    const videoIntroStage = document.getElementById("videoIntroStage");
+    const welcomeCardScreen = document.getElementById("welcomeCardScreen");
+    const introVideo = document.getElementById("introVideo");
+    const btnAudioIntro = document.getElementById("btnAudioIntro");
+
+    function pasarATarjeta() {
+      introVideo.pause();
+      videoIntroStage.classList.add("oculto");
+      welcomeCardScreen.classList.remove("oculto");
+    }
+
+    // Al terminar el video de intro, muestra la tarjeta de "Entrar al Sistema"
+    introVideo.addEventListener("ended", pasarATarjeta);
+
+    // Botón para pasar a la tarjeta sin esperar a que termine el video
+    document.getElementById("btnContinuarCard").addEventListener("click", pasarATarjeta);
+
+    // Activar o silenciar audio del video de intro
+    btnAudioIntro.addEventListener("click", () => {
+      introVideo.muted = !introVideo.muted;
+      btnAudioIntro.textContent = introVideo.muted ? "Activar Audio" : "Silenciar Audio";
+      introVideo.play().catch(() => {});
+    });
+
+    // Entrar al panel de telemetría desde la tarjeta
+    document.getElementById("btnEntrar").addEventListener("click", () => {
+      welcomeCardScreen.classList.add("oculto");
+    });
+
+    // Volver a reproducir el video inicial desde el panel
+    document.getElementById("btnVerIntro").addEventListener("click", () => {
+      welcomeCardScreen.classList.remove("oculto");
+      videoIntroStage.classList.remove("oculto");
+      introVideo.currentTime = 0;
+      introVideo.play().catch(() => {});
+    });
+
+    let registros = [];
+    let port, reader;
+
+    function actualizarEstadisticas() {
+      const total = registros.length;
+      document.getElementById("statCount").textContent = total;
+      if (total === 0) {
+        document.getElementById("statMax").textContent = "0.00 m/s";
+        document.getElementById("statAvg").textContent = "0.00 m/s";
+        document.getElementById("gaugeFill").style.width = "0%";
+        return;
+      }
+      const maxVel = Math.max(...registros.map(r => r.ms));
+      const avgVel = registros.reduce((acc, r) => acc + r.ms, 0) / total;
+      document.getElementById("statMax").textContent = `${maxVel.toFixed(2)} m/s`;
+      document.getElementById("statAvg").textContent = `${avgVel.toFixed(2)} m/s`;
+    }
+
+    document.getElementById("btnConectar").addEventListener("click", async () => {
+      if (!("serial" in navigator)) {
+        alert("Tu navegador no soporta Web Serial. Usa Google Chrome o Microsoft Edge.");
+        return;
+      }
+
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+
+        const badge = document.getElementById("usbStatus");
+        badge.textContent = "Arduino Conectado";
+        badge.classList.add("online");
+
+        const decoder = new TextDecoderStream();
+        port.readable.pipeTo(decoder.writable);
+        reader = decoder.readable.getReader();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          const lineas = buffer.split("\n");
+          buffer = lineas.pop();
+
+          for (const linea of lineas) {
+            const limpia = linea.trim();
+            if (!limpia) continue;
+            const partes = limpia.split(",");
+            if (partes.length === 3) {
+              const seg = parseFloat(partes[0]);
+              const ms = parseFloat(partes[1]);
+              const kmh = parseFloat(partes[2]);
+
+              if (!isNaN(seg) && !isNaN(ms) && !isNaN(kmh) && seg > 0 && ms > 0) {
+                registros.push({ n: registros.length + 1, seg, ms, kmh });
+
+                document.getElementById("velMs").textContent = `${ms.toFixed(2)} m/s`;
+                document.getElementById("velKmh").textContent = `${kmh.toFixed(2)} km/h`;
+                document.getElementById("tiempoSeg").textContent = `${seg.toFixed(4)} s`;
+
+                const porcentaje = Math.min((ms / 5) * 100, 100);
+                document.getElementById("gaugeFill").style.width = `${porcentaje}%`;
+
+                const card = document.getElementById("heroCard");
+                card.classList.add("flash");
+                setTimeout(() => card.classList.remove("flash"), 450);
+
+                const fila = document.createElement("tr");
+                fila.innerHTML = `
+                  <td>${registros.length}</td>
+                  <td>${seg.toFixed(4)}</td>
+                  <td><strong>${ms.toFixed(2)}</strong></td>
+                  <td>${kmh.toFixed(2)}</td>
+                `;
+                document.getElementById("tablaHistorial").prepend(fila);
+                actualizarEstadisticas();
+              }
+            }
+          }
+        }
+      } catch (err) {
+        alert("No se pudo conectar al puerto serie: " + err.message);
+      }
+    });
+
+    document.getElementById("btnLimpiar").addEventListener("click", () => {
+      registros = [];
+      document.getElementById("tablaHistorial").innerHTML = "";
+      document.getElementById("velMs").textContent = "0.00 m/s";
+      document.getElementById("velKmh").textContent = "0.00 km/h";
+      document.getElementById("tiempoSeg").textContent = "0.0000 s";
+      actualizarEstadisticas();
+    });
+
+    document.getElementById("btnExportar").addEventListener("click", () => {
+      if (registros.length === 0) return;
+      let csv = "pasada,tiempo_s,velocidad_ms,velocidad_kmh\n";
+      registros.forEach(r => {
+        csv += `${r.n},${r.seg},${r.ms},${r.kmh}\n`;
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "telemetria_velocidad.csv";
+      a.click();
+    });
+  </script>
+</body>
+</html>
